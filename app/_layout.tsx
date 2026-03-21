@@ -1,9 +1,11 @@
+import { ForceUpdateScreen } from "@/components/force-update-screen";
+import { useMinimumVersion } from "@/components/use-minimum-version";
 import * as NavigationBar from "expo-navigation-bar";
 import { PortalHost } from "@rn-primitives/portal";
 import { useNavigationContainerRef, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useCSSVariable } from "uniwind";
 import { setupPlayer } from "../components/use-audio-player-sync";
@@ -11,6 +13,16 @@ import { AuthProvider } from "../lib/auth-context";
 import { QueryProvider } from "../lib/query-client";
 import { Sentry, navigationIntegration } from "../lib/sentry";
 import "./global.css";
+
+const ForceUpdateGuard = () => {
+  const { updateRequirement } = useMinimumVersion();
+  if (!updateRequirement) return null;
+  return (
+    <View style={StyleSheet.absoluteFill} className="z-50">
+      <ForceUpdateScreen requirement={updateRequirement} />
+    </View>
+  );
+};
 
 const RootLayout = () => {
   const ref = useNavigationContainerRef();
@@ -43,6 +55,7 @@ const RootLayout = () => {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: background as string }}>
       <QueryProvider>
         <AuthProvider>
+          <ForceUpdateGuard />
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: background as string },
