@@ -28,6 +28,7 @@ export interface Post {
 
 export interface Purchase {
   name: string;
+  unique_permalink: string;
   creator_name: string;
   creator_username: string;
   creator_profile_url: string;
@@ -53,6 +54,8 @@ export interface Seller {
 export interface ApiFilters {
   q?: string;
   seller?: string[];
+  products?: string[];
+  purchase_ids?: string[];
   archived?: boolean;
   order?: "date-desc" | "date-asc";
 }
@@ -67,7 +70,7 @@ interface Pagination {
   last: number;
 }
 
-interface SearchResponse {
+export interface SearchResponse {
   success: boolean;
   user_id: string;
   purchases: Purchase[];
@@ -83,13 +86,19 @@ interface PurchaseDetailResponse {
 
 const PER_PAGE = 24;
 
-const buildSearchPath = (page: number, filters: ApiFilters) => {
+export const buildSearchPath = (page: number, filters: ApiFilters) => {
   const params = new URLSearchParams();
   params.set("items", String(PER_PAGE));
   params.set("page", String(page));
   if (filters.q) params.set("q", filters.q);
   if (filters.seller?.length) {
     for (const id of filters.seller) params.append("seller[]", id);
+  }
+  if (filters.products?.length) {
+    for (const id of filters.products) params.append("products[]", id);
+  }
+  if (filters.purchase_ids?.length) {
+    for (const id of filters.purchase_ids) params.append("purchase_ids[]", id);
   }
   if (filters.archived !== undefined) params.set("archived", String(filters.archived));
   if (filters.order) params.set("order", filters.order);
@@ -137,7 +146,7 @@ export const usePost = (urlRedirectToken: string, postExternalId: string): Post 
   );
 };
 
-export const usePurchase = (id: string): Purchase | undefined => {
+export const usePurchase = (url_redirect_external_id: string | undefined): Purchase | undefined => {
   const queryClient = useQueryClient();
   const { accessToken } = useAuth();
 
@@ -146,37 +155,19 @@ export const usePurchase = (id: string): Purchase | undefined => {
     return queries
       .flatMap(([, data]) => data?.pages ?? [])
       .flatMap((page) => page.purchases)
-      .find((p) => p.url_redirect_token === id);
-  }, [queryClient, id]);
-
-  const fallbackQuery = useInfiniteQuery<SearchResponse, Error>({
-    queryKey: ["purchases", {}],
-    queryFn: ({ pageParam }) =>
-      requestAPI<SearchResponse>(buildSearchPath(pageParam as number, {}), {
-        accessToken: assertDefined(accessToken),
-      }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage) => lastPage.meta.pagination.next ?? undefined,
-    enabled: !!accessToken && !cachedPurchase,
-  });
-
-  const fallbackPurchase = useMemo(
-    () => fallbackQuery.data?.pages.flatMap((page) => page.purchases).find((p) => p.url_redirect_token === id),
-    [fallbackQuery.data, id],
-  );
-
-  const purchase = cachedPurchase ?? fallbackPurchase;
+      .find((p) => p.url_redirect_external_id === url_redirect_external_id);
+  }, [queryClient, url_redirect_external_id]);
 
   const detailQuery = useQuery<PurchaseDetailResponse>({
-    queryKey: ["purchase", id],
+    queryKey: ["purchase", url_redirect_external_id],
     queryFn: () =>
       requestAPI<PurchaseDetailResponse>(
-        `mobile/url_redirects/get_url_redirect_attributes/${purchase?.url_redirect_external_id}`,
+        `mobile/url_redirects/get_url_redirect_attributes/${url_redirect_external_id}`,
         { accessToken: assertDefined(accessToken) },
       ),
-    enabled: !!accessToken && !!purchase?.url_redirect_external_id,
-    placeholderData: purchase ? { success: true, product: purchase, purchase_valid: true } : undefined,
+    enabled: !!accessToken && !!url_redirect_external_id,
+    placeholderData: cachedPurchase ? { success: true, product: cachedPurchase, purchase_valid: true } : undefined,
   });
 
-  return detailQuery.data?.product ?? purchase;
+  return detailQuery.data?.product;
 };
