@@ -13,7 +13,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
     bundleIdentifier: process.env.IOS_BUNDLE_NAME,
     infoPlist: {
-      UIBackgroundModes: ["audio", "remote-notification"],
+      UIBackgroundModes: ["audio", "remote-notification", "fetch"],
       ITSAppUsesNonExemptEncryption: false,
       UIDesignRequiresCompatibility: true,
     },
@@ -77,6 +77,40 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-video",
     "expo-image",
     "expo-sharing",
+    [
+      "expo-widgets",
+      {
+        widgets: [
+          {
+            name: "RevenueWidget",
+            displayName: "Gumroad",
+            description: "Revenue totals",
+            contentMarginsDisabled: true,
+            supportedFamilies: ["systemSmall"],
+          },
+        ],
+      },
+    ],
+    [
+      "react-native-android-widget",
+      {
+        fonts: ["./assets/fonts/ABCFavorit-Regular-custom.ttf", "./assets/fonts/ABCFavorit-Bold-custom.ttf"],
+        widgets: [
+          {
+            name: "RevenueWidget",
+            label: "Gumroad",
+            description: "Revenue totals",
+            previewImage: "./assets/images/widget-preview.png",
+            minWidth: "110dp",
+            minHeight: "110dp",
+            targetCellWidth: 2,
+            targetCellHeight: 2,
+            resizeMode: "horizontal|vertical",
+            updatePeriodMillis: 1800000,
+          },
+        ],
+      },
+    ],
     [
       "@sentry/react-native/expo",
       {
