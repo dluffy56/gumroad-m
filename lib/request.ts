@@ -10,37 +10,51 @@ export class UnauthorizedError extends Error {
   }
 }
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export const request = async <T>(
   url: string,
   options?: RequestInit & { data?: any; skipResponseBody?: boolean },
 ): Promise<T> => {
   const body = options?.data ? JSON.stringify(options.data) : options?.body;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-    body,
-  });
-  const details = {
-    // Including the token in the logged URL makes Sentry exclude the whole string. We can remove this when we use the public API
-    url: url.replace(env.EXPO_PUBLIC_MOBILE_TOKEN, "[filtered]"),
-    method: options?.method ?? "GET",
-    status: response.status,
-  };
-  if (response.status === 401) {
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  if (options?.signal) options.signal.addEventListener("abort", () => controller.abort());
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+      },
+      body,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const details = {
+      // Including the token in the logged URL makes Sentry exclude the whole string. We can remove this when we use the public API
+      url: url.replace(env.EXPO_PUBLIC_MOBILE_TOKEN, "[filtered]"),
+      method: options?.method ?? "GET",
+      status: response.status,
+    };
+    if (response.status === 401) {
+      console.info("HTTP request", details);
+      throw new UnauthorizedError("Unauthorized");
+    }
+    if (!response.ok) {
+      const error = response.status === 404 ? "Not found" : (await response.text()).slice(0, 10000);
+      console.info("HTTP request", { ...details, error });
+      throw new Error(`Request failed: ${response.status} ${error}`);
+    }
     console.info("HTTP request", details);
-    throw new UnauthorizedError("Unauthorized");
+    if (options?.skipResponseBody) return undefined as T;
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  if (!response.ok) {
-    const error = response.status === 404 ? "Not found" : (await response.text()).slice(0, 10000);
-    console.info("HTTP request", { ...details, error });
-    throw new Error(`Request failed: ${response.status} ${error}`);
-  }
-  console.info("HTTP request", details);
-  if (options?.skipResponseBody) return undefined as T;
-  return response.json();
 };
 
 export const buildApiUrl = (path: string) => {
